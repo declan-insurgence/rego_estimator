@@ -30,6 +30,65 @@ Production-minded monorepo for an Apps in ChatGPT integration that estimates Vic
         └── components/lineItems.ts
 ```
 
+## End-to-end workflow
+
+```text
+[User in ChatGPT]
+        |
+        v
+[Apps SDK calls MCP over /mcp]
+        |
+        v
+[FastAPI MCP server]
+  - initialize / tools/list / tools/call
+        |
+        +--> [normalize_vehicle_request]
+        |         |
+        |         v
+        |   Normalized inputs
+        |
+        +--> [estimate_registration_cost]
+                  |
+                  +--> [get_fee_snapshot]
+                  |         |
+                  |         +--> Blob/local cached snapshot
+                  |         +--> Last-good fallback if refresh fails
+                  |
+                  +--> Fee calculator (rego + TAC + transfer + duty)
+                  |
+                  v
+          structuredContent + meta
+                  |
+                  v
+[Widget (ui://widget/index.html)]
+  - Itemized line items
+  - Confidence + assumptions
+  - Data freshness
+```
+
+```mermaid
+flowchart TD
+    A[User in ChatGPT] --> B[Apps SDK invokes MCP /mcp]
+    B --> C[FastAPI MCP server]
+
+    C --> D[normalize_vehicle_request]
+    D --> E[Normalized vehicle input]
+
+    C --> F[estimate_registration_cost]
+    F --> G[get_fee_snapshot]
+    G --> H[(Blob/local fee snapshot)]
+    G --> I[Last-good snapshot fallback]
+
+    F --> J[Fee calculator\nrego + TAC + transfer + duty]
+    E --> J
+    H --> J
+    I --> J
+
+    J --> K[Tool response\ncontent + structuredContent + meta]
+    K --> L[Widget ui://widget/index.html]
+    L --> M[Rendered estimate\nline items, confidence, assumptions, freshness]
+```
+
 ## Architecture highlights
 
 - **One-way data flow:** MCP tool outputs are rendered in widget UI; UI does not fetch external data.
