@@ -163,3 +163,18 @@ Each tool call returns:
   1. `pytest server/tests`
   2. `npm --prefix ui run build`
   3. smoke: `uvicorn vic_rego_estimator.main:app --host 0.0.0.0 --port 8080`
+
+## ChatGPT app quality control verification
+
+The following controls are implemented and test-covered:
+
+- **Privacy disclosure:** request audit logs include `request_id`, `client_ip`, `authenticated_sub`, `method`, `path`, `status_code`, and `latency_ms`.
+- **Abuse controls:** configure `MCP_RATE_LIMIT_REQUESTS` and `MCP_RATE_LIMIT_WINDOW_SECONDS`; `/mcp` enforces 429 with `Retry-After`.
+- **Authentication failure UX:** bearer challenges include actionable `WWW-Authenticate` fields for connector remediation.
+- **Error UX states:** `/mcp` errors return concise `recovery_steps` for unsupported method (400), unknown tool (404), rate limit (429), and internal error (500).
+- **Correlation/auditability:** `X-Request-ID` is echoed if supplied and generated when absent; responses include request IDs in error payloads.
+
+Operational policy for production:
+- Retain request audit logs for 30 days.
+- Limit log access via least-privilege RBAC (support read-only, SRE write/admin).
+- Add `X-Request-ID` to incident tickets/runbooks so support can quickly trace requests in logs.
