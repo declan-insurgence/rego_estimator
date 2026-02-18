@@ -10,6 +10,7 @@ from typing import Any
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -117,7 +118,11 @@ async def enforce_mcp_auth(request: Request, call_next):
     except AuthError as exc:
         return JSONResponse(
             status_code=exc.status_code,
-            content={"detail": exc.message},
+            content={
+                "detail": exc.message,
+                "recovery_steps": _mcp_recovery_steps(exc.status_code),
+                "request_id": getattr(request.state, "request_id", None),
+            },
             headers={
                 "WWW-Authenticate": authenticator.challenge_header(
                     error=exc.error,
@@ -142,11 +147,77 @@ async def enforce_mcp_rate_limit(request: Request, call_next):
             content={
                 "detail": "Rate limit exceeded for /mcp",
                 "retry_after_seconds": decision.retry_after_seconds,
+                "recovery_steps": _mcp_recovery_steps(429),
+                "request_id": getattr(request.state, "request_id", None),
             },
             headers={"Retry-After": str(decision.retry_after_seconds)},
         )
 
     return await call_next(request)
+
+
+def _mcp_recovery_steps(status_code: int) -> list[str]:
+    if status_code == 400:
+        return ["Retry with a supported MCP method: initialize, tools/list, or tools/call."]
+    if status_code == 401:
+        return ["Reconnect authentication in ChatGPT connector setup and retry."]
+    if status_code == 403:
+        return ["Re-authorize with a token that includes the required scope and retry."]
+    if status_code == 404:
+        return ["Retry using a tool name returned by tools/list."]
+    if status_code == 429:
+        return ["Wait for Retry-After seconds, then retry the request."]
+    return ["Retry the request. If the issue persists, contact support with X-Request-ID."]
+
+
+@app.exception_handler(HTTPException)
+async def mcp_http_exception_handler(request: Request, exc: HTTPException):
+    if request.url.path != "/mcp":
+        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
+    status_code = exc.status_code
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "detail": exc.detail,
+            "recovery_steps": _mcp_recovery_steps(status_code),
+            "request_id": getattr(request.state, "request_id", None),
+        },
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def mcp_validation_exception_handler(request: Request, exc: RequestValidationError):
+    if request.url.path != "/mcp":
+        return JSONResponse(status_code=422, content={"detail": exc.errors()})
+
+    return JSONResponse(
+        status_code=400,
+        content={
+            "detail": "Invalid MCP request payload",
+            "recovery_steps": _mcp_recovery_steps(400),
+            "request_id": getattr(request.state, "request_id", None),
+        },
+    )
+
+
+@app.exception_handler(Exception)
+async def mcp_unexpected_exception_handler(request: Request, exc: Exception):
+    if request.url.path != "/mcp":
+        raise exc
+
+    logger.exception(
+        "Unhandled MCP exception",
+        extra={"request_id": getattr(request.state, "request_id", None)},
+    )
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "Internal error while handling MCP request",
+            "recovery_steps": _mcp_recovery_steps(500),
+            "request_id": getattr(request.state, "request_id", None),
+        },
+    )
 
 
 @app.get("/")

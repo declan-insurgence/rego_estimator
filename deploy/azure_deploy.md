@@ -67,17 +67,27 @@ Run the same `az containerapp update` with RG/ENV per stage.
 Before promoting to production, verify the following ChatGPT app quality controls:
 
 - **Privacy disclosure**
-  - Document what identifiers are logged (`request_id`, source IP, auth subject, method/path, status, latency).
-  - Confirm retention period and access controls for logs.
+  - Logged identifiers are documented in `request_audit_log`: `request_id`, source IP (`client_ip`), auth subject (`authenticated_sub`), method/path, status, and latency.
+  - Retain logs for **30 days** in Azure Log Analytics and restrict access with least-privilege RBAC roles (`Log Analytics Reader` for support, write access only for platform SRE).
 - **Abuse controls**
-  - Set `MCP_RATE_LIMIT_REQUESTS` and `MCP_RATE_LIMIT_WINDOW_SECONDS` for expected traffic.
-  - Verify `/mcp` returns HTTP 429 with `Retry-After` when limits are exceeded.
+  - Set `MCP_RATE_LIMIT_REQUESTS` and `MCP_RATE_LIMIT_WINDOW_SECONDS` per environment (`60/60` baseline; increase only with load testing evidence).
+  - Verify `/mcp` returns HTTP 429 and `Retry-After` when limits are exceeded.
 - **Authentication failure UX**
-  - Validate `WWW-Authenticate` contains actionable details for clients.
-  - Ensure auth failures map to clear user-facing copy in ChatGPT connector setup docs.
+  - `WWW-Authenticate` challenge includes actionable details (`authorization_uri`, `resource`, `client_id`, `error`, `error_description`, and optional `scope`).
+  - ChatGPT connector setup copy should map failures to user actions:
+    - `invalid_request`: reconnect and re-authorize the connector.
+    - `invalid_token`: sign in again and retry.
+    - `insufficient_scope`: request the required scope and reconnect.
 - **Error UX states**
-  - Exercise unsupported method (400), unknown tool (404), rate limit (429), and internal error paths.
-  - Confirm users get concise recovery steps (retry, reconnect auth, contact support).
+  - Exercise unsupported method (400), unknown tool (404), rate limit (429), and internal error (500).
+  - Confirm each error response includes concise `recovery_steps` (retry, reconnect auth, contact support with request ID).
 - **Correlation and auditability**
-  - Verify `X-Request-ID` is accepted and echoed; generated when missing.
+  - Verify `X-Request-ID` is accepted/echoed when provided and generated when missing.
   - Include request IDs in incident runbooks so support can trace requests quickly.
+
+### Incident runbook snippet (support)
+1. Ask user for timestamp and `X-Request-ID` from connector logs.
+2. Query Log Analytics by `request_id` to retrieve method/path, auth subject, status, and latency.
+3. If `status=401/403`, guide user through connector re-auth.
+4. If `status=429`, advise retry after `Retry-After` interval and evaluate rate limit sizing.
+5. If `status=500`, escalate to on-call with request ID and correlated log entry.
