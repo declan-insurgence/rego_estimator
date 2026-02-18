@@ -19,13 +19,35 @@ type EstimatePayload = {
   };
 };
 
+type WidgetFormData = {
+  transaction_type: string;
+  vehicle_category: string;
+  make?: string;
+  model?: string;
+  year?: number;
+  fuel_type?: string;
+  term_months: number;
+};
+
+type HostUpdatePayload = {
+  toolOutput?: EstimatePayload;
+};
+
+type HostEventHandler = (payload: HostUpdatePayload | EstimatePayload) => void;
+
+type OpenAIHostBridge = {
+  toolOutput?: EstimatePayload;
+  widgetState?: Record<string, unknown>;
+  setWidgetState?: (state: Record<string, unknown>) => void;
+  invokeTool?: (name: string, payload: Record<string, unknown>) => Promise<unknown>;
+  callTool?: (name: string, payload: Record<string, unknown>) => Promise<unknown>;
+  on?: (eventName: string, handler: HostEventHandler) => (() => void) | void;
+  off?: (eventName: string, handler: HostEventHandler) => void;
+};
+
 declare global {
   interface Window {
-    openai?: {
-      toolOutput?: EstimatePayload;
-      widgetState?: Record<string, unknown>;
-      setWidgetState?: (state: Record<string, unknown>) => void;
-    };
+    openai?: OpenAIHostBridge;
   }
 }
 
@@ -90,13 +112,107 @@ function renderResults(payload?: EstimatePayload): void {
   `;
 }
 
+function readFormData(): WidgetFormData {
+  const transaction = document.getElementById('transaction') as HTMLSelectElement | null;
+  const category = document.getElementById('category') as HTMLSelectElement | null;
+  const make = document.getElementById('make') as HTMLInputElement | null;
+  const model = document.getElementById('model') as HTMLInputElement | null;
+  const year = document.getElementById('year') as HTMLInputElement | null;
+  const fuel = document.getElementById('fuel') as HTMLInputElement | null;
+  const term = document.getElementById('term') as HTMLSelectElement | null;
+
+  const parsedYear = year?.value.trim() ? Number(year.value) : undefined;
+
+  return {
+    transaction_type: transaction?.value ?? 'renewal',
+    vehicle_category: category?.value ?? 'passenger_car',
+    make: make?.value.trim() || undefined,
+    model: model?.value.trim() || undefined,
+    year: parsedYear && !Number.isNaN(parsedYear) ? parsedYear : undefined,
+    fuel_type: fuel?.value.trim() || undefined,
+    term_months: Number(term?.value ?? 12) || 12,
+  };
+}
+
+async function invokeEstimateTool(): Promise<void> {
+  const bridge = window.openai;
+  if (!bridge) return;
+
+  const payload = readFormData();
+  const runTool = bridge.invokeTool ?? bridge.callTool;
+
+  if (runTool) {
+    await runTool('estimate_registration_cost', payload);
+  }
+
+  if (bridge.setWidgetState) {
+    bridge.setWidgetState({
+      ...(bridge.widgetState || {}),
+      lastEstimateRequest: payload,
+    });
+  }
+}
+
+function bindFormBridge(): void {
+  const triggerIds = ['transaction', 'category', 'make', 'model', 'year', 'fuel', 'term'];
+
+  triggerIds.forEach((id) => {
+    const element = document.getElementById(id) as HTMLInputElement | HTMLSelectElement | null;
+    if (!element) return;
+
+    const eventType = element.tagName === 'SELECT' ? 'change' : 'blur';
+    element.addEventListener(eventType, () => {
+      void invokeEstimateTool();
+    });
+
+    if (element.tagName !== 'SELECT') {
+      element.addEventListener('keydown', (event) => {
+        if ((event as KeyboardEvent).key !== 'Enter') return;
+        void invokeEstimateTool();
+      });
+    }
+  });
+}
+
+function subscribeToHostUpdates(): void {
+  const bridge = window.openai;
+  if (!bridge) return;
+
+  const updateHandler: HostEventHandler = (payload) => {
+    const maybeToolOutput = 'toolOutput' in payload ? payload.toolOutput : payload;
+    renderResults(maybeToolOutput);
+  };
+
+  if (bridge.on) {
+    const unsubscribe = bridge.on('toolOutput', updateHandler);
+    if (typeof unsubscribe !== 'function' && bridge.on !== undefined) {
+      bridge.on('widgetState', () => {
+        renderResults(bridge.toolOutput);
+      });
+    }
+    return;
+  }
+
+  if (typeof window.addEventListener === 'function') {
+    window.addEventListener('message', (event: MessageEvent) => {
+      if (!event?.data) return;
+      const data = event.data as { type?: string; toolOutput?: EstimatePayload };
+      if (data.type !== 'openai.toolOutput' || !data.toolOutput) return;
+      renderResults(data.toolOutput);
+    });
+  }
+}
+
 (document.getElementById('share') as HTMLButtonElement).addEventListener('click', () => {
   const estimate = window.openai?.toolOutput?.estimate;
   if (!estimate || !window.openai?.setWidgetState) return;
   window.openai.setWidgetState({
     ...(window.openai.widgetState || {}),
-    sharedQuote: estimate
+    sharedQuote: estimate,
+    sharedAt: new Date().toISOString(),
   });
 });
 
+bindFormBridge();
+subscribeToHostUpdates();
 renderResults(window.openai?.toolOutput);
