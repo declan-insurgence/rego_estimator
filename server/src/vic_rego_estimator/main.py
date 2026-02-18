@@ -61,12 +61,36 @@ async def mcp_endpoint(payload: dict[str, Any]):
     method = payload.get("method")
     req_id = payload.get("id")
 
+    if method == "initialize":
+        return JSONResponse(
+            {
+                "jsonrpc": "2.0",
+                "id": req_id,
+                "result": {
+                    "protocolVersion": "2024-11-05",
+                    "serverInfo": {
+                        "name": "vic-rego-estimator",
+                        "title": "Vic Rego Estimator MCP",
+                        "version": "0.1.0",
+                    },
+                    "capabilities": {
+                        "tools": {
+                            "listChanged": False,
+                        }
+                    },
+                    "securitySchemes": _server_security_schemes(),
+                },
+            }
+        )
+
     if method == "tools/list":
         tools = [
             {
                 "name": tool.name,
                 "description": tool.description,
                 "inputSchema": tool.input_schema,
+                "annotations": tool.annotations,
+                "securitySchemes": tool.security_schemes,
             }
             for tool in TOOLS.values()
         ]
@@ -92,6 +116,17 @@ async def mcp_endpoint(payload: dict[str, Any]):
         )
 
     raise HTTPException(status_code=400, detail=f"Unsupported MCP method: {method}")
+
+
+def _server_security_schemes() -> list[dict[str, Any]]:
+    if authenticator is None:
+        return [{"type": "noauth"}]
+    return [
+        {
+            "type": "oauth2",
+            "description": "Bearer token required for calling protected MCP methods.",
+        }
+    ]
 
 
 @app.get("/widget-index")

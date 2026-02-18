@@ -57,14 +57,22 @@ When auth is enabled, `/mcp` requires a valid bearer token and returns a `WWW-Au
 
 ## Tool contract
 
-Tools exposed via `/mcp` (JSON-RPC style):
+Methods exposed via `/mcp` (JSON-RPC style):
+
+1. `initialize` (returns protocol version, server capabilities, and security schemes)
+2. `tools/list`
+3. `tools/call`
+
+Tool names returned by `tools/list`:
 
 1. `normalize_vehicle_request`
 2. `get_fee_snapshot`
 3. `estimate_registration_cost`
 4. `explain_assumptions`
 
-Each tool returns:
+Each tool descriptor includes `name`, `description`, `inputSchema`, `annotations`, and `securitySchemes`.
+
+Each tool call returns:
 
 - `content`: concise model-facing summary
 - `structuredContent`: strict JSON object for UI rendering
