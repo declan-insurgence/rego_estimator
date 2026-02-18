@@ -9,12 +9,14 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from vic_rego_estimator.auth import AuthError, OIDCAuthenticator
 from vic_rego_estimator.tools.registry import TOOLS
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("vic_rego_estimator")
 
 app = FastAPI(title="Vic Rego Estimator MCP")
+authenticator = OIDCAuthenticator.from_settings()
 
 WIDGET_DIR = Path(__file__).parent / "static" / "widget"
 app.mount("/widget", StaticFiles(directory=WIDGET_DIR, html=True), name="widget")
@@ -23,6 +25,29 @@ app.mount("/widget", StaticFiles(directory=WIDGET_DIR, html=True), name="widget"
 @app.middleware("http")
 async def redact_logs(request: Request, call_next):
     logger.info("Request %s %s", request.method, request.url.path)
+    return await call_next(request)
+
+
+@app.middleware("http")
+async def enforce_mcp_auth(request: Request, call_next):
+    if request.url.path != "/mcp" or authenticator is None:
+        return await call_next(request)
+
+    try:
+        claims = authenticator.validate_authorization_header(request.headers.get("authorization"))
+        request.state.token_claims = claims
+    except AuthError as exc:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.message},
+            headers={
+                "WWW-Authenticate": authenticator.challenge_header(
+                    error=exc.error,
+                    description=exc.message,
+                )
+            },
+        )
+
     return await call_next(request)
 
 

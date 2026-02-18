@@ -11,6 +11,12 @@ def _duty_amount(value: float, rates: list[dict[str, float]]) -> float:
     return round(value * rate, 2)
 
 
+def _source_at(snapshot: FeeSnapshot, index: int) -> str:
+    if snapshot.sources and 0 <= index < len(snapshot.sources):
+        return snapshot.sources[index]
+    return snapshot.sources[0] if snapshot.sources else ""
+
+
 def estimate_registration_cost(normalized: NormalizedVehicleRequest, snapshot: FeeSnapshot) -> EstimateResult:
     term_key = str(normalized.term_months)
     lines: list[FeeLineItem] = []
@@ -33,25 +39,25 @@ def estimate_registration_cost(normalized: NormalizedVehicleRequest, snapshot: F
 
     reg_fee *= reg_discount
 
-    lines.append(FeeLineItem(key="registration_fee", label="Registration fee", amount_min=round(reg_fee, 2), amount_max=round(reg_fee, 2), source=snapshot.sources[0]))
-    lines.append(FeeLineItem(key="tac_charge", label="TAC charge", amount_min=round(tac, 2), amount_max=round(tac, 2), source=snapshot.sources[0]))
+    lines.append(FeeLineItem(key="registration_fee", label="Registration fee", amount_min=round(reg_fee, 2), amount_max=round(reg_fee, 2), source=_source_at(snapshot, 0)))
+    lines.append(FeeLineItem(key="tac_charge", label="TAC charge", amount_min=round(tac, 2), amount_max=round(tac, 2), source=_source_at(snapshot, 0)))
 
     if normalized.transaction_type == "transfer":
-        lines.append(FeeLineItem(key="transfer_fee", label="Transfer fee", amount_min=snapshot.transfer_fee, amount_max=snapshot.transfer_fee, source=snapshot.sources[2]))
+        lines.append(FeeLineItem(key="transfer_fee", label="Transfer fee", amount_min=snapshot.transfer_fee, amount_max=snapshot.transfer_fee, source=_source_at(snapshot, 2)))
         if normalized.market_value_aud is None:
             duty_min = _duty_amount(10000, snapshot.duty_rates)
             duty_max = _duty_amount(45000, snapshot.duty_rates)
             assumptions.append("Used $10k-$45k market value range for duty.")
         else:
             duty_min = duty_max = _duty_amount(normalized.market_value_aud, snapshot.duty_rates)
-        lines.append(FeeLineItem(key="motor_vehicle_duty", label="Motor vehicle duty (stamp duty)", amount_min=duty_min, amount_max=duty_max, source=snapshot.sources[3]))
+        lines.append(FeeLineItem(key="motor_vehicle_duty", label="Motor vehicle duty (stamp duty)", amount_min=duty_min, amount_max=duty_max, source=_source_at(snapshot, 3)))
 
     if normalized.transaction_type == "new_registration":
-        lines.append(FeeLineItem(key="number_plate_fee", label="Number plate fee", amount_min=snapshot.number_plate_fee, amount_max=snapshot.number_plate_fee, source=snapshot.sources[0]))
+        lines.append(FeeLineItem(key="number_plate_fee", label="Number plate fee", amount_min=snapshot.number_plate_fee, amount_max=snapshot.number_plate_fee, source=_source_at(snapshot, 0)))
 
     if normalized.use_type == "business":
         admin_fee = 18.4
-        lines.append(FeeLineItem(key="business_admin", label="Business processing surcharge", amount_min=admin_fee, amount_max=admin_fee, source=snapshot.sources[0], notes="May vary by channel."))
+        lines.append(FeeLineItem(key="business_admin", label="Business processing surcharge", amount_min=admin_fee, amount_max=admin_fee, source=_source_at(snapshot, 0), notes="May vary by channel."))
 
     for key, value in normalized.manual_overrides.items():
         for line in lines:
