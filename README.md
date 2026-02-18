@@ -37,6 +37,23 @@ Production-minded monorepo for an Apps in ChatGPT integration that estimates Vic
 - **No analytics:** no telemetry scripts or tracking IDs in UI/server.
 - **Redacted logs:** middleware logs method/path only, never body fields.
 - **Refresh strategy:** monthly scrape from VicRoads/SRO pages and Blob cache with *last good snapshot* fallback.
+- **Protected MCP endpoint:** optional OIDC JWT validation for `/mcp` with RFC 6750 bearer challenges.
+
+## Authentication configuration
+
+Set these environment variables to protect `/mcp` with OIDC:
+
+- `AUTH_ENABLED=true`
+- `OIDC_ISSUER=https://<tenant>/`
+- `OIDC_AUDIENCE=<api-audience>`
+- `OIDC_CLIENT_ID=<oauth-client-id>`
+- `OIDC_JWKS_URL=https://<tenant>/.well-known/jwks.json`
+- Optional:
+  - `OIDC_AUTHORIZATION_URL=https://<tenant>/authorize`
+  - `OIDC_REQUIRED_SCOPE=mcp:invoke`
+  - `OIDC_ALGORITHMS=["RS256"]`
+
+When auth is enabled, `/mcp` requires a valid bearer token and returns a `WWW-Authenticate` challenge with OIDC authorization details when authentication fails.
 
 ## Tool contract
 

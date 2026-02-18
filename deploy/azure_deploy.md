@@ -47,7 +47,7 @@ az containerapp create \
   --target-port 8080 \
   --ingress external \
   --registry-server $ACR.azurecr.io \
-  --env-vars AZURE_BLOB_CONNECTION_STRING="$BLOB_CONN" FEE_SNAPSHOT_BLOB_CONTAINER=fee-snapshots FEE_SNAPSHOT_BLOB_NAME=vic/latest.json
+  --env-vars AZURE_BLOB_CONNECTION_STRING="$BLOB_CONN" FEE_SNAPSHOT_BLOB_CONTAINER=fee-snapshots FEE_SNAPSHOT_BLOB_NAME=vic/latest.json AUTH_ENABLED=true OIDC_ISSUER="https://<tenant>/" OIDC_AUDIENCE="<api-audience>" OIDC_CLIENT_ID="<client-id>" OIDC_JWKS_URL="https://<tenant>/.well-known/jwks.json" OIDC_REQUIRED_SCOPE="mcp:invoke"
 ```
 
 ## Promote same image to staging/prod

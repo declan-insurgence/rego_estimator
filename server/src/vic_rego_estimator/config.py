@@ -9,6 +9,14 @@ class Settings(BaseSettings):
     fee_snapshot_blob_name: str = "vic/latest.json"
     azure_blob_connection_string: str | None = None
     refresh_frequency_days: int = 30
+    auth_enabled: bool = False
+    oidc_issuer: str | None = None
+    oidc_audience: str | None = None
+    oidc_client_id: str | None = None
+    oidc_jwks_url: str | None = None
+    oidc_authorization_url: str | None = None
+    oidc_required_scope: str | None = None
+    oidc_algorithms: list[str] = ["RS256"]
 
 
 settings = Settings()
