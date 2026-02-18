@@ -16,6 +16,8 @@ class ToolDef:
     name: str
     description: str
     input_schema: dict[str, Any]
+    annotations: dict[str, Any]
+    security_schemes: list[dict[str, Any]]
     handler: Callable[[dict[str, Any]], Any]
 
 
@@ -93,24 +95,32 @@ TOOLS: dict[str, ToolDef] = {
         name="normalize_vehicle_request",
         description="Normalize user vehicle request and infer missing fields.",
         input_schema={"type": "object", "required": ["transaction_type", "vehicle_category"]},
+        annotations={"readOnlyHint": True},
+        security_schemes=[{"type": "noauth"}],
         handler=_normalize,
     ),
     "get_fee_snapshot": ToolDef(
         name="get_fee_snapshot",
         description="Load latest scraped fee snapshot from Blob storage with fallback.",
         input_schema={"type": "object", "properties": {}},
+        annotations={"readOnlyHint": True},
+        security_schemes=[{"type": "noauth"}],
         handler=_get_snapshot,
     ),
     "estimate_registration_cost": ToolDef(
         name="estimate_registration_cost",
         description="Estimate itemised Victorian vehicle registration costs.",
         input_schema={"type": "object", "required": ["transaction_type", "vehicle_category"]},
+        annotations={"readOnlyHint": True},
+        security_schemes=[{"type": "noauth"}],
         handler=_estimate,
     ),
     "explain_assumptions": ToolDef(
         name="explain_assumptions",
         description="Explain assumptions and uncertainty from unknown inputs.",
         input_schema={"type": "object", "required": ["transaction_type", "vehicle_category"]},
+        annotations={"readOnlyHint": True},
+        security_schemes=[{"type": "noauth"}],
         handler=_assumptions,
     ),
 }
