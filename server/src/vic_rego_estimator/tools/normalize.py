@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-import logging
-
 from vic_rego_estimator.models.schemas import NormalizedVehicleRequest, VehicleRequest
 
-logger = logging.getLogger("vic_rego_estimator.normalize")
 
 CATEGORY_DEFAULTS = {
     "passenger_car": {"body_type": "sedan", "tare_kg": 1500, "seats": 5},
@@ -25,43 +22,39 @@ CONCESSION_HINTS = {
 
 
 def normalize_vehicle_request(payload: dict) -> NormalizedVehicleRequest:
-    try:
-        req = VehicleRequest.model_validate(payload)
-        inferred_fields: dict[str, object] = {}
-        assumptions: list[str] = []
-        unknown_fields: list[str] = []
+    req = VehicleRequest.model_validate(payload)
+    inferred_fields: dict[str, object] = {}
+    assumptions: list[str] = []
+    unknown_fields: list[str] = []
 
-        defaults = CATEGORY_DEFAULTS[req.vehicle_category]
-        data = req.model_dump()
+    defaults = CATEGORY_DEFAULTS[req.vehicle_category]
+    data = req.model_dump()
 
-        for field_name, default_value in defaults.items():
-            if data.get(field_name) is None:
-                data[field_name] = default_value
-                inferred_fields[field_name] = default_value
-                assumptions.append(f"Defaulted {field_name} to {default_value} based on vehicle category.")
+    for field_name, default_value in defaults.items():
+        if data.get(field_name) is None:
+            data[field_name] = default_value
+            inferred_fields[field_name] = default_value
+            assumptions.append(f"Defaulted {field_name} to {default_value} based on vehicle category.")
 
-        if not req.postcode and not req.suburb:
-            unknown_fields.append("postcode_or_suburb")
-            assumptions.append("Geographic rating zone unknown; used metro baseline and widened TAC range.")
+    if not req.postcode and not req.suburb:
+        unknown_fields.append("postcode_or_suburb")
+        assumptions.append("Geographic rating zone unknown; used metro baseline and widened TAC range.")
 
-        if req.transaction_type == "transfer" and req.market_value_aud is None:
-            unknown_fields.append("market_value_aud")
-            assumptions.append("Market value unknown; motor vehicle duty estimated as a range.")
+    if req.transaction_type == "transfer" and req.market_value_aud is None:
+        unknown_fields.append("market_value_aud")
+        assumptions.append("Market value unknown; motor vehicle duty estimated as a range.")
 
-        for flag, enabled in req.concession_flags.items():
-            if enabled and flag in CONCESSION_HINTS:
-                assumptions.append(CONCESSION_HINTS[flag])
+    for flag, enabled in req.concession_flags.items():
+        if enabled and flag in CONCESSION_HINTS:
+            assumptions.append(CONCESSION_HINTS[flag])
 
-        for required in ["make", "model", "year", "fuel_type"]:
-            if data.get(required) is None:
-                unknown_fields.append(required)
+    for required in ["make", "model", "year", "fuel_type"]:
+        if data.get(required) is None:
+            unknown_fields.append(required)
 
-        return NormalizedVehicleRequest(
-            **data,
-            inferred_fields=inferred_fields,
-            unknown_fields=sorted(set(unknown_fields)),
-            assumptions=assumptions,
-        )
-    except Exception as exc:
-        logger.exception("normalize_vehicle_request_failed error=%s", str(exc))
-        raise
+    return NormalizedVehicleRequest(
+        **data,
+        inferred_fields=inferred_fields,
+        unknown_fields=sorted(set(unknown_fields)),
+        assumptions=assumptions,
+    )

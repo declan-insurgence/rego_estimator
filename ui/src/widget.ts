@@ -90,28 +90,13 @@ function renderResults(payload?: EstimatePayload): void {
   `;
 }
 
-const shareButton = document.getElementById('share') as HTMLButtonElement | null;
-if (shareButton) {
-  shareButton.addEventListener('click', () => {
-    try {
-      const estimate = window.openai?.toolOutput?.estimate;
-      if (!estimate || !window.openai?.setWidgetState) return;
-      window.openai.setWidgetState({
-        ...(window.openai.widgetState || {}),
-        sharedQuote: estimate
-      });
-    } catch (error) {
-      console.error('share_quote_failed', error);
-    }
+(document.getElementById('share') as HTMLButtonElement).addEventListener('click', () => {
+  const estimate = window.openai?.toolOutput?.estimate;
+  if (!estimate || !window.openai?.setWidgetState) return;
+  window.openai.setWidgetState({
+    ...(window.openai.widgetState || {}),
+    sharedQuote: estimate
   });
-}
+});
 
-try {
-  renderResults(window.openai?.toolOutput);
-} catch (error) {
-  const results = document.getElementById('results');
-  if (results) {
-    results.innerHTML = '<p class="muted">Unable to render estimate right now.</p>';
-  }
-  console.error('render_results_failed', error);
-}
+renderResults(window.openai?.toolOutput);

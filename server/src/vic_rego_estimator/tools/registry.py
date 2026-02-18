@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable
@@ -10,8 +9,6 @@ from vic_rego_estimator.scraping.parser import scrape_fee_snapshot
 from vic_rego_estimator.storage.snapshot_store import SnapshotStore, fallback_snapshot
 from vic_rego_estimator.tools.estimator import estimate_registration_cost
 from vic_rego_estimator.tools.normalize import normalize_vehicle_request
-
-logger = logging.getLogger("vic_rego_estimator.tools")
 
 
 @dataclass
@@ -33,9 +30,7 @@ async def _get_snapshot(_: dict[str, Any]) -> ToolEnvelope:
             snapshot = await scrape_fee_snapshot()
             store.save(snapshot)
             freshness = "refreshed"
-            logger.info("snapshot_refreshed refreshed_at=%s", snapshot.refreshed_at.isoformat())
-        except Exception as exc:
-            logger.exception("snapshot_refresh_failed error=%s", str(exc))
+        except Exception:
             snapshot = fallback_snapshot()
             freshness = "fallback"
 
@@ -47,11 +42,7 @@ async def _get_snapshot(_: dict[str, Any]) -> ToolEnvelope:
 
 
 async def _normalize(payload: dict[str, Any]) -> ToolEnvelope:
-    try:
-        normalized = normalize_vehicle_request(payload)
-    except Exception as exc:
-        logger.exception("normalize_failed error=%s", str(exc))
-        raise
+    normalized = normalize_vehicle_request(payload)
     return ToolEnvelope(
         content=f"Normalized request for {normalized.vehicle_category} {normalized.transaction_type}.",
         structuredContent={"normalizedRequest": normalized.model_dump(mode="json")},
@@ -60,14 +51,9 @@ async def _normalize(payload: dict[str, Any]) -> ToolEnvelope:
 
 
 async def _estimate(payload: dict[str, Any]) -> ToolEnvelope:
-    try:
-        normalized = normalize_vehicle_request(payload)
-        snapshot = store.load() or fallback_snapshot()
-        result = estimate_registration_cost(normalized, snapshot)
-    except Exception as exc:
-        logger.exception("estimate_failed error=%s", str(exc))
-        raise
-
+    normalized = normalize_vehicle_request(payload)
+    snapshot = store.load() or fallback_snapshot()
+    result = estimate_registration_cost(normalized, snapshot)
     summary = f"Estimated VIC cost {result.total_min:.2f}-{result.total_max:.2f} AUD ({result.confidence} confidence)."
     return ToolEnvelope(
         content=summary,
@@ -77,12 +63,7 @@ async def _estimate(payload: dict[str, Any]) -> ToolEnvelope:
 
 
 async def _assumptions(payload: dict[str, Any]) -> ToolEnvelope:
-    try:
-        normalized = normalize_vehicle_request(payload)
-    except Exception as exc:
-        logger.exception("assumptions_failed error=%s", str(exc))
-        raise
-
+    normalized = normalize_vehicle_request(payload)
     confidence = "low" if normalized.unknown_fields else "high"
     return ToolEnvelope(
         content=f"Generated assumptions with {confidence} confidence.",

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import io
-import logging
 import re
 from datetime import datetime, timezone
 from typing import Any
@@ -12,8 +11,6 @@ from bs4 import BeautifulSoup
 
 from vic_rego_estimator.models.schemas import FeeSnapshot
 from vic_rego_estimator.scraping.sources import VIC_SOURCES
-
-logger = logging.getLogger("vic_rego_estimator.scraping")
 
 CURRENCY_RE = re.compile(r"\$\s*([0-9][0-9,]*(?:\.[0-9]{1,2})?)")
 
@@ -37,13 +34,8 @@ def _parse_html_tables(html: str) -> dict[str, float]:
 
 
 def _parse_pdf_table(pdf_bytes: bytes) -> dict[str, float]:
-    try:
-        with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
-            all_text = " ".join((page.extract_text() or "") for page in pdf.pages)
-    except Exception as exc:
-        logger.exception("pdf_parse_failed error=%s", str(exc))
-        return {"heavy_truck_base": 1510.0, "bus_base": 1200.0}
-
+    with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+        all_text = " ".join((page.extract_text() or "") for page in pdf.pages)
     return {
         "heavy_truck_base": _extract_first_currency(all_text, 1510.0),
         "bus_base": _extract_first_currency(all_text[all_text.find("bus") :], 1200.0),
@@ -55,18 +47,12 @@ async def scrape_fee_snapshot() -> FeeSnapshot:
     urls = [source.url for source in VIC_SOURCES]
     async with httpx.AsyncClient(timeout=20) as client:
         for source in VIC_SOURCES:
-            try:
-                response = await client.get(source.url)
-                response.raise_for_status()
-                if ".pdf" in source.url:
-                    parsed.update(_parse_pdf_table(response.content))
-                else:
-                    parsed.update(_parse_html_tables(response.text))
-                logger.info("source_scraped name=%s url=%s", source.name, source.url)
-            except httpx.HTTPError as exc:
-                logger.warning("source_fetch_failed name=%s url=%s error=%s", source.name, source.url, str(exc))
-            except Exception as exc:
-                logger.exception("source_parse_failed name=%s url=%s error=%s", source.name, source.url, str(exc))
+            response = await client.get(source.url)
+            response.raise_for_status()
+            if ".pdf" in source.url:
+                parsed.update(_parse_pdf_table(response.content))
+            else:
+                parsed.update(_parse_html_tables(response.text))
 
     reg12 = parsed.get("registration_fee_12", 930.0)
     tac12 = parsed.get("tac_12", 530.0)

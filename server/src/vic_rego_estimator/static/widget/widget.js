@@ -18,26 +18,12 @@
 
   const payload = window.openai && window.openai.toolOutput;
   const results = document.getElementById('results');
-  try {
-    if (payload && payload.estimate && results) {
-      results.innerHTML = `<p><strong>Total:</strong> $${payload.estimate.total_min} - $${payload.estimate.total_max}</p><p>Confidence: ${payload.estimate.confidence}</p>`;
-    }
-  } catch (error) {
-    if (results) {
-      results.innerHTML = '<p class="muted">Unable to render estimate right now.</p>';
-    }
-    console.error('widget_render_failed', error);
+  if (payload && payload.estimate) {
+    results.innerHTML = `<p><strong>Total:</strong> $${payload.estimate.total_min} - $${payload.estimate.total_max}</p><p>Confidence: ${payload.estimate.confidence}</p>`;
   }
 
-  const shareButton = document.getElementById('share');
-  if (shareButton) {
-    shareButton.addEventListener('click', function () {
-      try {
-        if (!window.openai || !window.openai.setWidgetState || !payload || !payload.estimate) return;
-        window.openai.setWidgetState(Object.assign({}, window.openai.widgetState || {}, { sharedQuote: payload.estimate }));
-      } catch (error) {
-        console.error('share_quote_failed', error);
-      }
-    });
-  }
+  document.getElementById('share').addEventListener('click', function () {
+    if (!window.openai || !window.openai.setWidgetState || !payload || !payload.estimate) return;
+    window.openai.setWidgetState(Object.assign({}, window.openai.widgetState || {}, { sharedQuote: payload.estimate }));
+  });
 })();

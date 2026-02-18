@@ -1,15 +1,12 @@
 from __future__ import annotations
 
 import json
-import logging
 from datetime import datetime, timezone
 
 from azure.storage.blob import BlobServiceClient
 
 from vic_rego_estimator.config import settings
 from vic_rego_estimator.models.schemas import FeeSnapshot
-
-logger = logging.getLogger("vic_rego_estimator.storage")
 
 
 class SnapshotStore:
@@ -18,7 +15,6 @@ class SnapshotStore:
 
     def _blob_client(self):
         if not self._conn:
-            logger.info("blob_storage_not_configured")
             return None
         svc = BlobServiceClient.from_connection_string(self._conn)
         return svc.get_blob_client(
@@ -32,27 +28,19 @@ class SnapshotStore:
             return None
         try:
             data = client.download_blob().readall()
-            snapshot = FeeSnapshot.model_validate_json(data)
-            logger.info("snapshot_loaded refreshed_at=%s", snapshot.refreshed_at.isoformat())
-            return snapshot
-        except Exception as exc:
-            logger.warning("snapshot_load_failed error=%s", str(exc))
+            return FeeSnapshot.model_validate_json(data)
+        except Exception:
             return None
 
     def save(self, snapshot: FeeSnapshot) -> None:
         client = self._blob_client()
         if client is None:
             return
-        try:
-            payload = json.dumps(snapshot.model_dump(mode="json")).encode("utf-8")
-            client.upload_blob(payload, overwrite=True)
-            logger.info("snapshot_saved refreshed_at=%s", snapshot.refreshed_at.isoformat())
-        except Exception as exc:
-            logger.warning("snapshot_save_failed error=%s", str(exc))
+        payload = json.dumps(snapshot.model_dump(mode="json")).encode("utf-8")
+        client.upload_blob(payload, overwrite=True)
 
 
 def fallback_snapshot() -> FeeSnapshot:
-    logger.info("using_fallback_snapshot")
     return FeeSnapshot(
         refreshed_at=datetime.now(timezone.utc),
         sources=["https://www.vicroads.vic.gov.au/", "https://www.sro.vic.gov.au/motor-vehicle-duty"],
