@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     oidc_authorization_url: str | None = None
     oidc_required_scope: str | None = None
     oidc_algorithms: list[str] = ["RS256"]
+    mcp_rate_limit_requests: int = 60
+    mcp_rate_limit_window_seconds: int = 60
 
 
 settings = Settings()

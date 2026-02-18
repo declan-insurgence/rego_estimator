@@ -48,3 +48,34 @@ def test_mcp_with_token_passes_auth(monkeypatch):
 
     assert res.status_code == 200
     assert "tools" in res.json()["result"]
+
+
+def test_mcp_rate_limit_enforced(monkeypatch):
+    monkeypatch.setattr(main_module, "authenticator", None)
+    monkeypatch.setattr(main_module.rate_limiter, "max_requests", 1)
+    monkeypatch.setattr(main_module.rate_limiter, "window_seconds", 60)
+    main_module.rate_limiter._requests.clear()
+
+    client = TestClient(app)
+
+    first = client.post('/mcp', json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
+    second = client.post('/mcp', json={"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
+
+    assert first.status_code == 200
+    assert second.status_code == 429
+    assert second.headers["Retry-After"]
+
+
+def test_request_id_is_echoed_in_response_header(monkeypatch):
+    monkeypatch.setattr(main_module, "authenticator", None)
+    main_module.rate_limiter._requests.clear()
+    client = TestClient(app)
+
+    response = client.post(
+        '/mcp',
+        headers={"X-Request-ID": "req-123"},
+        json={"jsonrpc": "2.0", "id": 3, "method": "tools/list"},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["X-Request-ID"] == "req-123"

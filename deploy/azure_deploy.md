@@ -62,3 +62,22 @@ Run the same `az containerapp update` with RG/ENV per stage.
    - estimate_registration_cost
    - explain_assumptions
 4. Confirm widget template path is `ui://widget/index.html` and endpoint serves `/widget/index.html`.
+
+## Production app review checklist
+Before promoting to production, verify the following ChatGPT app quality controls:
+
+- **Privacy disclosure**
+  - Document what identifiers are logged (`request_id`, source IP, auth subject, method/path, status, latency).
+  - Confirm retention period and access controls for logs.
+- **Abuse controls**
+  - Set `MCP_RATE_LIMIT_REQUESTS` and `MCP_RATE_LIMIT_WINDOW_SECONDS` for expected traffic.
+  - Verify `/mcp` returns HTTP 429 with `Retry-After` when limits are exceeded.
+- **Authentication failure UX**
+  - Validate `WWW-Authenticate` contains actionable details for clients.
+  - Ensure auth failures map to clear user-facing copy in ChatGPT connector setup docs.
+- **Error UX states**
+  - Exercise unsupported method (400), unknown tool (404), rate limit (429), and internal error paths.
+  - Confirm users get concise recovery steps (retry, reconnect auth, contact support).
+- **Correlation and auditability**
+  - Verify `X-Request-ID` is accepted and echoed; generated when missing.
+  - Include request IDs in incident runbooks so support can trace requests quickly.
